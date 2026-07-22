@@ -18,7 +18,7 @@ class ToolCall(TypedDict):
     name: str
     args: dict
     ok: bool
-    result: dict | None
+    result: dict | list | None
     error: str | None
     latency_ms: int
 

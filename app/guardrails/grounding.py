@@ -24,10 +24,16 @@ def check_grounding(
 
     haystack = json.dumps(facts) + "\n" + policy
 
-    # Currency amounts: $129.90 -> search for 129.90 in haystack.
+    # Currency amounts: $129.90 -> search for 129.90 (and float-normalized
+    # form "129.9") in haystack. Needed because json.loads drops trailing zeros
+    # on floats (129.90 -> 129.9 in Python).
     for m in _RE_CURRENCY.finditer(draft):
         numeric = m.group().lstrip("$").replace(",", "")
-        if numeric not in haystack:
+        try:
+            normalized = str(float(numeric))  # "129.90" -> "129.9"
+        except ValueError:
+            normalized = numeric
+        if numeric not in haystack and normalized not in haystack:
             return False, m.group()
 
     # ISO dates: 2026-07-24
