@@ -1,4 +1,9 @@
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+# Load .env into os.environ so LangSmith and other SDK clients that read
+# os.environ directly (not pydantic-settings) see the values.
+load_dotenv()
 
 # gpt-4o-mini token prices in USD per token.
 # Source: https://openai.com/api/pricing/  Checked: 2026-07-22
