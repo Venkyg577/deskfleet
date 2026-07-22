@@ -1,0 +1,64 @@
+{
+  "1": {
+    "order_id": "1",
+    "user_id": 1,
+    "placed_on": "2026-05-01",
+    "status": "delivered",
+    "carrier": "FedEx",
+    "eta": "2026-05-06",
+    "items": [
+      {"product_id": 1, "title": "Fjallraven - Foldsack No. 1 Backpack", "quantity": 2}
+    ],
+    "total_usd": 219.90
+  },
+  "2": {
+    "order_id": "2",
+    "user_id": 1,
+    "placed_on": "2026-06-10",
+    "status": "cancelled",
+    "carrier": "BlueDart",
+    "eta": null,
+    "items": [
+      {"product_id": 5, "title": "John Hardy Women's Legends Naga Gold & Silver Dragon Station Chain Bracelet", "quantity": 1}
+    ],
+    "total_usd": 695.00
+  },
+  "3": {
+    "order_id": "3",
+    "user_id": 2,
+    "placed_on": "2026-06-20",
+    "status": "packed",
+    "carrier": "DTDC",
+    "eta": "2026-07-26",
+    "items": [
+      {"product_id": 7, "title": "White Gold Plated Princess", "quantity": 1},
+      {"product_id": 15, "title": "BIYLACLESEN Women's 3-in-1 Ski Trip Snowboard Jacket", "quantity": 1}
+    ],
+    "total_usd": 66.98
+  },
+  "4": {
+    "order_id": "4",
+    "user_id": 3,
+    "placed_on": "2026-07-01",
+    "status": "delayed",
+    "carrier": "Delhivery",
+    "eta": "2026-07-28",
+    "items": [
+      {"product_id": 9, "title": "WD 2TB Elements Portable External Hard Drive - USB 3.0", "quantity": 1}
+    ],
+    "total_usd": 64.00
+  },
+  "5": {
+    "order_id": "5",
+    "user_id": 3,
+    "placed_on": "2026-06-14",
+    "status": "in_transit",
+    "carrier": "BlueDart",
+    "eta": "2026-07-24",
+    "items": [
+      {"product_id": 7, "title": "White Gold Plated Princess", "quantity": 1}
+    ],
+    "total_usd": 129.90
+  },
+  "99999": {"found": false, "order_id": "99999"}
+}
