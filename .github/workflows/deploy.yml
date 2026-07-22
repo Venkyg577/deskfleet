@@ -39,11 +39,13 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Configure Docker auth for Artifact Registry
+        run: gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
+
       - name: Build and push image
         run: |
-          gcloud builds submit \
-            --tag asia-south1-docker.pkg.dev/deskfleet-202607/deskfleet/deskfleet:latest \
-            --project=deskfleet-202607
+          docker build -t asia-south1-docker.pkg.dev/deskfleet-202607/deskfleet/deskfleet:latest .
+          docker push asia-south1-docker.pkg.dev/deskfleet-202607/deskfleet/deskfleet:latest
 
       - name: Deploy to Cloud Run
         run: |
