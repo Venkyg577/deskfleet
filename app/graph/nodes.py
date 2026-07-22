@@ -8,7 +8,8 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from app.config import settings
-from app.graph.state import Classification, Fact, TicketState
+from app.graph.state import Classification, Fact, Review, TicketState
+from app.guardrails.grounding import check_grounding
 from app.policy import SUPPORT_POLICY
 from app.tools.registry import TOOL_SCHEMAS, ToolCall, execute_tool
 
@@ -214,16 +215,83 @@ def make_responder(llm: BaseChatModel):
 
 
 def make_reviewer(llm: BaseChatModel):
-    # Phase 4: hardcoded approve. Real LLM grading added in Phase 5.
+    chain = llm.with_structured_output(Review)
+
     def reviewer(state: TicketState) -> dict:
         t0 = time.monotonic()
+        facts_block = _format_facts(state["facts"])
+        messages = [
+            SystemMessage(content=(
+                "You are a quality reviewer for DeskFleet support responses.\n\n"
+                f"FACTS (ground truth the Responder used):\n{facts_block}\n\n"
+                f"POLICY:\n{SUPPORT_POLICY}\n\n"
+                f"DRAFT REPLY:\n{state['draft']}\n\n"
+                "Evaluate the draft on three dimensions and respond with JSON:\n"
+                "- grounded: every factual claim appears in the facts or policy\n"
+                "- policy_ok: the reply follows the support policy\n"
+                "- addresses_ticket: the reply answers what the customer asked\n\n"
+                "Verdict:\n"
+                "- approve: all three pass\n"
+                "- revise: fixable issues (missed question, tone, minor gap)\n"
+                "- escalate: unfixable (order not found, customer demands human, policy exception)\n\n"
+                "List each specific issue in 'issues'."
+            )),
+            HumanMessage(content=state["ticket"]),
+        ]
+        pt = _prompt_tokens(messages)
+        review: Review = chain.invoke(messages)
+        ct = _completion_tokens(review)
         latency_ms = int((time.monotonic() - t0) * 1000)
-        return {
-            "review_verdict": "approve",
-            "review_issues": [],
-            "iterations": state["iterations"] + 1,
-            "decision": "RESOLVED",
+
+        new_iterations = state["iterations"] + 1
+        verdict = review.verdict
+        issues = review.issues
+
+        updates: dict = {
+            "review_issues": issues,
+            "iterations": new_iterations,
             "node_latency_ms": {"reviewer": latency_ms},
+            "tokens": {"prompt": pt, "completion": ct},
         }
+
+        if verdict == "approve":
+            # Deterministic grounding post-check before committing to RESOLVED.
+            ok, offender = check_grounding(state["draft"], list(state["facts"]))
+            if not ok:
+                updates.update({
+                    "review_verdict": "escalate",
+                    "decision": "ESCALATE",
+                    "escalation_reason": f"ungrounded_value_in_draft: {offender}",
+                })
+            else:
+                updates.update({
+                    "review_verdict": "approve",
+                    "decision": "RESOLVED",
+                })
+
+        elif verdict == "escalate":
+            updates.update({
+                "review_verdict": "escalate",
+                "decision": "ESCALATE",
+                "escalation_reason": review.reason,
+            })
+
+        else:  # revise
+            if new_iterations >= settings.MAX_ITERS:
+                # Cap breach: force escalate (PRD section 7).
+                reason = "max_review_iterations_reached: " + "; ".join(issues)
+                updates.update({
+                    "review_verdict": "escalate",
+                    "decision": "ESCALATE",
+                    "escalation_reason": reason,
+                })
+            else:
+                updates.update({"review_verdict": "revise"})
+
+        log.info(
+            "reviewer: verdict=%s decision=%s iterations=%d",
+            updates.get("review_verdict"), updates.get("decision"), new_iterations,
+        )
+        return updates
 
     return reviewer

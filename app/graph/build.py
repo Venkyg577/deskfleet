@@ -2,6 +2,7 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 
 from app.graph.nodes import make_classifier, make_researcher, make_responder, make_reviewer
+from app.graph.routing import route_after_review
 from app.graph.state import TicketState
 from app.llm import get_llm
 
@@ -21,11 +22,19 @@ def compile_graph(llm: BaseChatModel | None = None):
     builder.add_node("responder", make_responder(llm))
     builder.add_node("reviewer", make_reviewer(llm))
 
-    # Phase 4: linear spine only. Conditional edges added in Phase 5.
     builder.add_edge(START, "classifier")
     builder.add_edge("classifier", "researcher")
     builder.add_edge("researcher", "responder")
     builder.add_edge("responder", "reviewer")
-    builder.add_edge("reviewer", END)
+
+    # Conditional edges from Reviewer: revise -> Responder, else -> END.
+    # Cap breach and grounding failure are resolved inside the reviewer node
+    # before routing runs, so route_after_review only sees approve or escalate
+    # going to END, and revise going back to Responder.
+    builder.add_conditional_edges(
+        "reviewer",
+        route_after_review,
+        {"responder": "responder", END: END},
+    )
 
     return builder.compile()
