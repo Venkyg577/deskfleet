@@ -48,12 +48,13 @@ def get_order_status(order_id: str) -> dict:
 
     result: dict = dict(entry)
 
-    # Enrich with live cart data when available.
+    # Enrich with live cart data when available. We keep the fixture's
+    # placed_on (sensible 2026 dates) rather than the FakeStoreAPI cart date,
+    # whose sandbox carts are dated 2020 and read as wrong next to 2026 ETAs.
+    # user_id and items are honest live joins.
     cart = fetch_cart(order_id)
     if cart and isinstance(cart, dict) and "userId" in cart:
         result["user_id"] = cart["userId"]
-        raw_date = cart.get("date", "")
-        result["placed_on"] = raw_date[:10] if raw_date else result.get("placed_on")
         if "products" in cart:
             result["items"] = [
                 {"product_id": p["productId"], "quantity": p["quantity"]}
