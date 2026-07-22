@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeskFleet</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container { max-width: 760px; margin: 0 auto; }
+
+    header { margin-bottom: 36px; }
+    header h1 { font-size: 1.6rem; font-weight: 700; color: #818cf8; }
+    header p  { margin-top: 6px; color: #64748b; font-size: 0.9rem; }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      padding: 12px 14px;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    textarea:focus, input[type="text"]:focus { border-color: #6366f1; }
+
+    .field { margin-bottom: 16px; }
+
+    .row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 24px; }
+    .row .field { margin-bottom: 0; flex: 1; }
+
+    button {
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    button:hover  { background: #4f46e5; }
+    button:disabled { background: #334155; cursor: not-allowed; }
+
+    .hint { font-size: 0.78rem; color: #475569; margin-top: 6px; }
+
+    /* ── result panel ───────────────────────────────────── */
+    #result { display: none; margin-top: 8px; }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 18px;
+    }
+    .badge-RESOLVED { background: #14532d; color: #4ade80; }
+    .badge-ESCALATE { background: #7c2d12; color: #fb923c; }
+    .badge-REFUSE   { background: #450a0a; color: #f87171; }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+
+    .reply { line-height: 1.7; white-space: pre-wrap; }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+    .meta strong { color: #94a3b8; }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+
+    pre {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 14px;
+      font-size: 0.8rem;
+      color: #7dd3fc;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .trace-link { font-size: 0.85rem; }
+    .trace-link a { color: #818cf8; text-decoration: none; }
+    .trace-link a:hover { text-decoration: underline; }
+
+    .status-line {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+    .status-line.error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>DeskFleet</h1>
+      <p>Multi-agent support resolver. Four nodes. Three decisions: RESOLVED, ESCALATE, or REFUSE.</p>
+    </header>
+
+    <div class="field">
+      <label>Support ticket</label>
+      <textarea id="ticket" placeholder="Describe your issue..."></textarea>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Order ID <span style="font-weight:400;text-transform:none">(optional)</span></label>
+        <input type="text" id="order_id" placeholder="e.g. 5">
+      </div>
+      <button id="btn" onclick="resolve()">Resolve</button>
+    </div>
+
+    <p class="hint">Ctrl+Enter to submit.</p>
+    <p class="status-line" id="status"></p>
+
+    <div id="result">
+      <span class="badge" id="badge"></span>
+
+      <div class="card">
+        <div class="section-title">Reply</div>
+        <div class="reply" id="reply"></div>
+      </div>
+
+      <div class="card">
+        <div class="meta" id="meta"></div>
+      </div>
+
+      <div class="card" id="tc-card" style="display:none">
+        <div class="section-title">Tool calls</div>
+        <pre id="tc"></pre>
+      </div>
+
+      <div class="card trace-link" id="trace-card" style="display:none">
+        <div class="section-title">LangSmith trace</div>
+        <a id="trace-a" href="#" target="_blank"></a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    async function resolve() {
+      const ticket = $('ticket').value.trim();
+      if (!ticket) return;
+
+      $('btn').disabled = true;
+      $('status').className = 'status-line';
+      $('status').textContent = 'Running agent…';
+      $('result').style.display = 'none';
+
+      try {
+        const res = await fetch('/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticket,
+            order_id: $('order_id').value.trim() || null,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          $('status').className = 'status-line error';
+          $('status').textContent = data.detail || 'Request failed';
+          return;
+        }
+
+        // Badge
+        $('badge').textContent = data.decision;
+        $('badge').className = `badge badge-${data.decision}`;
+
+        // Reply
+        $('reply').textContent = data.reply;
+
+        // Meta row
+        const totalTokens = (data.tokens?.prompt || 0) + (data.tokens?.completion || 0);
+        const cost = (data.cost_usd || 0).toFixed(5);
+        $('meta').innerHTML = [
+          `<span><strong>Category</strong> ${data.category || '—'}</span>`,
+          `<span><strong>Iterations</strong> ${data.iterations}</span>`,
+          `<span><strong>Latency</strong> ${data.latency_ms} ms</span>`,
+          `<span><strong>Tokens</strong> ${totalTokens}</span>`,
+          `<span><strong>Cost</strong> $${cost}</span>`,
+          data.escalation_reason
+            ? `<span><strong>Reason</strong> ${data.escalation_reason}</span>`
+            : '',
+        ].join('');
+
+        // Tool calls
+        if (data.tool_calls?.length) {
+          $('tc').textContent = JSON.stringify(data.tool_calls, null, 2);
+          $('tc-card').style.display = 'block';
+        } else {
+          $('tc-card').style.display = 'none';
+        }
+
+        // Trace link
+        if (data.langsmith_trace_url) {
+          $('trace-a').href = data.langsmith_trace_url;
+          $('trace-a').textContent = data.langsmith_trace_url;
+          $('trace-card').style.display = 'block';
+        } else {
+          $('trace-card').style.display = 'none';
+        }
+
+        $('status').textContent = '';
+        $('result').style.display = 'block';
+
+      } catch (e) {
+        $('status').className = 'status-line error';
+        $('status').textContent = 'Network error: ' + e.message;
+      } finally {
+        $('btn').disabled = false;
+      }
+    }
+
+    $('ticket').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) resolve();
+    });
+  </script>
+</body>
+</html>
