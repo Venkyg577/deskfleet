@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain-openai
+langchain-core
+langsmith
+pydantic
+pydantic-settings
+httpx
+prometheus-client
+tiktoken
+
+# dev / test
+pytest
+pytest-timeout
+respx
