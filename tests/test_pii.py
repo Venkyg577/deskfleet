@@ -1,5 +1,8 @@
+from fastapi.testclient import TestClient
+
 from app.guardrails import scan_input
 from app.guardrails.pii import redact
+from app.main import app
 
 
 def test_email_redacted():
@@ -55,3 +58,38 @@ def test_multiple_pii_types_all_redacted():
     assert "123-45-6789" not in text
     assert "555" not in text
     assert set(types) >= {"email", "ssn", "phone"}
+
+
+def test_outbound_pii_redacted_in_resolve_response():
+    """If the agent draft contains PII, /resolve must scrub it before returning."""
+    draft_with_pii = "Your contact email secret@corp.com has been noted and your order is confirmed."
+
+    fake_state = {
+        "ticket_id": "test-pii-out",
+        "decision": "RESOLVED",
+        "category": "order",
+        "draft": draft_with_pii,
+        "tool_calls": [],
+        "facts": [],
+        "iterations": 1,
+        "escalation_reason": None,
+        "tokens": {"prompt": 50, "completion": 20},
+        "node_latency_ms": {},
+    }
+
+    with TestClient(app) as client:
+        import app.main as main_module
+        original = main_module._graph
+        try:
+            class _FakeGraph:
+                def invoke(self, state, config=None):
+                    return fake_state
+            main_module._graph = _FakeGraph()
+            resp = client.post("/resolve", json={"ticket": "What is my email on file?"})
+        finally:
+            main_module._graph = original
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "secret@corp.com" not in data["reply"]
+    assert "[EMAIL_REDACTED]" in data["reply"]

@@ -1,0 +1,58 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          LLM_PROVIDER: fake
+          STORE_API_OFFLINE: "1"
+        run: pytest -q
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        run: |
+          gcloud builds submit \
+            --tag asia-south1-docker.pkg.dev/deskfleet-202607/deskfleet/deskfleet:latest \
+            --project=deskfleet-202607
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy deskfleet \
+            --image asia-south1-docker.pkg.dev/deskfleet-202607/deskfleet/deskfleet:latest \
+            --region asia-south1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --max-instances 1 \
+            --set-env-vars LLM_PROVIDER=openai,LLM_MODEL=gpt-4o-mini,LANGCHAIN_TRACING_V2=true,LANGCHAIN_PROJECT=deskfleet,STORE_API_BASE=https://fakestoreapi.com,STORE_API_OFFLINE=0,MAX_ITERS=2,MAX_TOOL_CALLS=4,DB_PATH=/tmp/deskfleet.db \
+            --set-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest,LANGCHAIN_API_KEY=LANGCHAIN_API_KEY:latest \
+            --project=deskfleet-202607
