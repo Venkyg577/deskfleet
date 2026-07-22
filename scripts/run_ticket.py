@@ -10,6 +10,10 @@ Prints the final state as formatted JSON.
 import json
 import sys
 import uuid
+from pathlib import Path
+
+# Ensure project root is on the path when run as a script.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.graph.build import compile_graph
 from app.graph.state import TicketState
