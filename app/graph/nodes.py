@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -214,6 +215,26 @@ def make_responder(llm: BaseChatModel):
     return responder
 
 
+# Customer explicitly asking for a human. Matches "speak to a person",
+# "talk to a human agent", "connect me to a representative", etc.
+_HUMAN_REQUEST = re.compile(
+    r"\b(speak|talk|connect|transfer|escalate)\b[\w\s,'-]{0,30}\b"
+    r"(person|human|agent|representative|rep|manager|supervisor)\b",
+    re.IGNORECASE,
+)
+
+
+def _forced_escalation(ticket: str, facts: list[Fact]) -> str | None:
+    """Deterministic escalation triggers (PRD 6.4). These override an LLM
+    'approve' because a rewrite cannot fix them."""
+    for f in facts:
+        if f["key"].split(".")[-1] == "found" and f["value"].strip().lower() == "false":
+            return "order_not_found"
+    if _HUMAN_REQUEST.search(ticket):
+        return "customer_requested_human"
+    return None
+
+
 def make_reviewer(llm: BaseChatModel):
     chain = llm.with_structured_output(Review)
 
@@ -254,7 +275,18 @@ def make_reviewer(llm: BaseChatModel):
             "tokens": {"prompt": pt, "completion": ct},
         }
 
-        if verdict == "approve":
+        # Deterministic escalation triggers override any LLM verdict, including
+        # approve, because a rewrite cannot fix a missing order or a human request.
+        forced = _forced_escalation(state["ticket"], list(state["facts"]))
+
+        if forced:
+            updates.update({
+                "review_verdict": "escalate",
+                "decision": "ESCALATE",
+                "escalation_reason": forced,
+            })
+
+        elif verdict == "approve":
             # Deterministic grounding post-check before committing to RESOLVED.
             ok, offender = check_grounding(state["draft"], list(state["facts"]))
             if not ok:
