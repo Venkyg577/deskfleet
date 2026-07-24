@@ -11,7 +11,9 @@ Eight core outcomes, all live and verified:
 5. Three terminal decisions surfaced in the API response: RESOLVED, ESCALATE, REFUSE.
 6. Full LangSmith tracing with per-node latency and every tool call visible in state.
 7. Prometheus token and cost metrics, eight collectors at `/metrics`.
-8. Docker, Cloud Run, and a GitHub Actions pipeline that runs 25 safety tests before it builds or deploys.
+8. Docker, Cloud Run, and a GitHub Actions pipeline that runs 29 safety tests before it builds or deploys.
+
+Plus one stretch beyond the eight core outcomes: an evaluation dataset and scorecard (see section 4, item 7). This closes the gap I flagged as my most honest limitation in the first draft of this note.
 
 Live URL: https://deskfleet-813357224637.asia-south1.run.app
 Repo: https://github.com/Venkyg577/deskfleet
@@ -69,10 +71,11 @@ Honest, unedited:
 4. **Per-instance metrics.** Prometheus counters live in process; more than one replica diverges. Pinned to one instance as a workaround.
 5. **No Grafana.** Metrics are exposed but no dashboard is deployed. Local compose stack included and documented.
 6. **Single-judge reviewer.** One LLM judge, no second opinion, so judge bias is unmeasured.
-7. **No evaluation dataset.** Correctness is demonstrated on four hand-picked tickets, not measured across a corpus.
-8. **Non-streaming loop.** The user waits for the full graph to complete.
+7. **Non-streaming loop.** The user waits for the full graph to complete.
 
-On item 7 specifically: I tested four cases I chose by hand, which is a demonstration and not a measurement. The honest next step is a set of around 30 labelled tickets with expected decisions, run as a nightly CI job that produces a decision-accuracy number and an escalation rate. I know the gap is there and I know what I would build to close it. That is the difference between "it worked when I tried it" and "I measured it."
+The first draft of this note listed "no evaluation dataset" here as my most honest gap. I closed it as the stretch. `tests/eval/dataset.jsonl` is 30 labelled tickets across all three decisions and four categories, grounded in the real fixtures. `scripts/run_eval.py` runs each through the same pipeline the API uses and scores predicted decisions against the labels. The latest full run on gpt-4o-mini (store offline for reproducibility) is 30/30 decision accuracy, 19/21 category accuracy, 23.3% escalation rate. Both category misses are borderline escalations (a delivery-related human request I labelled `other` that the classifier called `order`) and both still produced the right decision.
+
+Two honest caveats on that number. First, this is a small hand-authored set with deliberately clear labels, built to exercise every path and catch regressions, not an adversarial or statistically representative benchmark. A 100% score means the set is not yet hard enough, not that the agent is perfect. Second, the full-set number needs a real provider, so it is run by hand, not in CI. What CI gates on is the REFUSE subset: those tickets short-circuit on the injection scan before any LLM call, so `test_eval_gate.py` and the `run_eval.py --subset refuse` step run deterministically with no secrets and turn the build red if a labelled attack ever stops being refused. The next step from here is to grow the set toward 100 tickets, add near-miss and paraphrased-injection cases that are meant to be hard, and record the accuracy trend over time.
 
 ---
 

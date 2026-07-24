@@ -79,17 +79,36 @@ python scripts/run_ticket.py "Where is my order 5?"
 
 ## Tests
 
-All 25 tests run with no network and no API keys. The fake LLM provider returns scripted responses and the store API reads fixtures.
+All 29 tests run with no network and no API keys. The fake LLM provider returns scripted responses and the store API reads fixtures.
 
 ```bash
 LLM_PROVIDER=fake STORE_API_OFFLINE=1 pytest -q
 ```
 
-The three graded safety tests:
+The graded safety tests:
 
 - `test_allowlist.py`: an off-allowlist tool returns `TOOL_NOT_ALLOWED`, the real function is never called, the block counter increments.
 - `test_loop_guard.py`: a reviewer that always says "revise" still terminates at `MAX_ITERS` with an ESCALATE decision, wrapped in a timeout so a runaway loop fails rather than hangs.
 - `test_injection.py`: an injection ticket is refused with zero LLM calls and zero tool calls.
+- `test_eval_gate.py`: every labeled injection in the eval dataset is refused (the guardrail regression gate, see Evaluation below).
+
+---
+
+## Evaluation
+
+`tests/eval/dataset.jsonl` is a labeled set of 30 tickets, each with an expected decision (RESOLVED / ESCALATE / REFUSE) and category, spread across all three paths and grounded in the real fixtures (orders 1 to 5, the not-found order, the 20 products, the return policy). `scripts/run_eval.py` runs each ticket through the same pipeline the API uses and scores predicted decisions against the labels.
+
+```bash
+# Full run, real model (needs OPENAI_API_KEY in .env). Store offline for reproducibility.
+LLM_PROVIDER=openai STORE_API_OFFLINE=1 python scripts/run_eval.py --report tests/eval/report.json
+
+# Guardrail subset, deterministic, no network or key. This is the CI gate.
+LLM_PROVIDER=fake STORE_API_OFFLINE=1 python scripts/run_eval.py --subset refuse
+```
+
+Latest full run (gpt-4o-mini, store offline): decision accuracy 30/30 (100%), category accuracy 19/21 (90.5%), escalation rate 23.3%. The two category disagreements are on borderline escalations (a delivery-related human request labeled `other` but classified `order`); both still produced the correct decision.
+
+The REFUSE subset short-circuits on the injection scan before any LLM call, so CI runs it on the fake provider with no secrets and gates the deploy: weaken an injection pattern and a labeled attack drops from REFUSE to RESOLVED, turning the gate red. The full-set accuracy number needs a real provider and is run by hand, not in CI. This is a small hand-authored smoke and regression set with deliberately unambiguous labels, not an adversarial or statistically representative benchmark.
 
 ---
 
