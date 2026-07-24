@@ -25,6 +25,12 @@ jobs:
           STORE_API_OFFLINE: "1"
         run: pytest -q
 
+      - name: Eval gate (guardrail subset, offline)
+        env:
+          LLM_PROVIDER: fake
+          STORE_API_OFFLINE: "1"
+        run: python scripts/run_eval.py --subset refuse
+
   deploy:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
